@@ -31,6 +31,16 @@ ProyectoIngSoft4/
 └── README.md
 ```
 
+## Archivos CSV
+
+**IMPORTANTE**: Por razones de seguridad y privacidad, los archivos CSV con datos reales del SITM-MIO no están incluidos en este repositorio. Para ejecutar el proyecto, debes:
+
+1. Crear una carpeta `data/` en la raíz del proyecto
+2. Colocar los siguientes archivos CSV en esa carpeta:
+   - `lines-241.csv` (rutas)
+   - `stops-241.csv` (paradas)
+   - `linestops-241.csv` (secuencias de paradas)
+
 ## Compilación y Ejecución
 
 ### Requisitos
