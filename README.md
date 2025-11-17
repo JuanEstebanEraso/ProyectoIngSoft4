@@ -31,36 +31,6 @@ ProyectoIngSoft4/
 └── README.md
 ```
 
-## Archivos CSV
-
-### lines.csv
-Contiene información de las rutas:
-- LINEID: Identificador único de la ruta
-- PLANVERSIONID: Versión del plan
-- SHORTNAME: Nombre corto (ej: T31, P10B)
-- DESCRIPTION: Descripción de la ruta
-- ACTIVATIONDATE: Fecha de activación
-
-### stops.csv
-Contiene información de las paradas:
-- STOPID: Identificador único de la parada
-- PLANVERSIONID: Versión del plan
-- SHORTNAME: Nombre corto
-- LONGNAME: Nombre descriptivo
-- GPS_X, GPS_Y: Coordenadas GPS
-- DECIMALLONG, DECIMALLATIT: Coordenadas decimales
-
-### linestops.csv
-Define la secuencia de paradas en cada ruta:
-- LINESTOPID: Identificador único
-- STOPSEQUENCE: Orden de la parada en la secuencia
-- ORIENTATION: 0 = IDA, 1 = VUELTA
-- LINEID: ID de la ruta
-- STOPID: ID de la parada
-- PLANVERSIONID: Versión del plan
-- LINEVARIANT: Variante de la línea
-- LINEVARIANTTYPE: Tipo de variante
-
 ## Compilación y Ejecución
 
 ### Requisitos
