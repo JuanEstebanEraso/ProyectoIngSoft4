@@ -52,7 +52,7 @@ ProyectoIngSoft4/
 ### Usando Maven 
 
 ```powershell
-mvn clean compile javafx:run
+mvn clean compile exec:java
 ```
 
 ## Salida del Programa
@@ -61,11 +61,5 @@ El programa genera:
 
 1. **Salida en consola**: Resumen de rutas, paradas y arcos cargados
 2. **Archivo de texto**: `output/grafo_arcos_mio.txt` con el listado completo de todas las rutas, variantes y arcos
-3. **Visualización JavaFX**: Interfaz gráfica que muestra el grafo sobre el mapa real de Cali
-   - Descarga automáticamente tiles de OpenStreetMap
-   - Proyección Web Mercator para alineación geográfica
-   - **Arcos azules**: Rutas de IDA
-   - **Arcos rojos**: Rutas de VUELTA
-   - **Puntos amarillos**: Paradas del sistema
 
 

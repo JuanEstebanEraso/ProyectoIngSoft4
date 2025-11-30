@@ -2,7 +2,6 @@ package com.mio;
 
 import com.mio.model.*;
 import com.mio.util.*;
-import com.mio.visualization.MapVisualizerFX;
 import java.util.*;
 import java.io.*;
 
@@ -56,12 +55,7 @@ public class Main {
             System.out.printf("Archivo generado exitosamente: %s%n", outputPath);
             System.out.println("=".repeat(80));
             
-            // Lanzar visualización JavaFX
-            System.out.println("\n" + "=".repeat(80));
-            System.out.println("Iniciando visualización gráfica con JavaFX...");
-            System.out.println("=".repeat(80));
-            
-            MapVisualizerFX.launch(stops, graphBuilder.getArcs());
+            System.out.println("\n¡Proceso completado exitosamente!");
             
         } catch (Exception e) {
             System.err.println("Error durante la ejecución: " + e.getMessage());
