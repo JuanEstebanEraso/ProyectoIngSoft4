@@ -63,10 +63,10 @@ public class Client {
             // Verificar modo de ejecucion
             if (args.length > 0 && args[0].equals("benchmark")) {
                 // Benchmark con datos REALES del CSV
-                runBenchmarkWithRealData(master);
+                runBenchmark(master, arcs);
             } else if (args.length > 0 && args[0].equals("benchmark-gen")) {
                 // Benchmark con datos generados
-                runBenchmark(master, arcs);
+                runBenchmarkWithRealData(master);
             } else if (args.length > 1 && args[0].equals("test")) {
                 int count = Integer.parseInt(args[1]);
                 runSingleTestWithRealData(master, count);

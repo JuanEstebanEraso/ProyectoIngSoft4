@@ -42,7 +42,7 @@ public class MasterI implements Master {
     private Map<Integer, ArcState> arcStates = new ConcurrentHashMap<>();
 
     // Umbral de distancia para considerar que un bus esta en una parada (en km)
-    private static final double STOP_PROXIMITY_THRESHOLD = 0.3; // 300 metros
+    private static final double STOP_PROXIMITY_THRESHOLD = 0.05; // 50 metros
 
     // Radio de la Tierra en km (para Haversine)
     private static final double EARTH_RADIUS_KM = 6371.0;
@@ -339,11 +339,9 @@ public class MasterI implements Master {
                     SpeedDatagram[] datagrams = ((WorkerI.PartialResultWithDatagrams)partial).datagrams;
                     allDatagrams.add(datagrams);
                     for (SpeedDatagram dg : datagrams) {
-                        if (dg != null && dg.speed >= 5.0 && dg.speed <= 120.0) { // Filtro de velocidad mínima y máxima
+                        if (dg != null) {
                             filteredSpeedSum += dg.speed;
                             filteredCount++;
-                        }
-                        if (dg != null) {
                             uniqueArcs.add(dg.arcId);
                         }
                     }
@@ -388,7 +386,10 @@ public class MasterI implements Master {
             int lineCount = 0;
             br.readLine(); // Skip header
 
-            while ((line = br.readLine()) != null && (maxCount <= 0 || lineCount < 20000000)) {
+            int maxLines = 20_000_000;
+            int limit = (maxCount > 0 && maxCount < maxLines) ? maxCount : maxLines;
+
+            while ((line = br.readLine()) != null && lineCount < limit) {
                 lineCount++;
                 if (lineCount % 100000 == 0) {
                     System.out.println("[Master] Procesadas " + lineCount + " lineas. Datagramas validos (arcos): "
@@ -476,25 +477,37 @@ public class MasterI implements Master {
 
                     // Calcular distancia y tiempo para la velocidad
                     double distance = haversineDistance(history.lastLat, history.lastLon, lat, lon);
-                    double timeHours = (timestamp - history.lastTimestamp) / (1000.0 * 3600.0);
+                    double timeSeconds = (timestamp - history.lastTimestamp) / 1000.0;
+                    double timeHours = timeSeconds / 3600.0;
                     double speed = (timeHours > 0.0001) ? distance / timeHours : 0.0;
 
-                    // Actualizar estado del arco inmediatamente
-                    updateArcState(history.lastStopId, currentStopId,
+                    // Filtros de calidad de datos
+                    boolean valid = true;
+                    if (timeSeconds < 5) valid = false; // tiempo mínimo 5 segundos
+                    if (distance < 0.01) valid = false; // distancia mínima 10 metros
+                    if (speed > 120) valid = false; // velocidad máxima 120 km/h
+
+                    if (!valid) {
+                        System.out.println("[DESCARTADO] arco=" + history.lastStopId + "->" + currentStopId + " bus=" + busId + " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.1f", timeSeconds) + "s speed=" + String.format("%.2f", speed) + "km/h");
+                    } else {
+                        // Actualizar estado del arco inmediatamente
+                        updateArcState(history.lastStopId, currentStopId,
                             history.lastLat, history.lastLon,
                             lat, lon,
                             history.lastTimestamp, timestamp);
 
-                    // Crear datagrama para el worker
-                    result = new SpeedDatagram();
-                    result.fromStopId = history.lastStopId;
-                    result.toStopId = currentStopId;
-                    result.timestamp = timestamp;
-                    result.fromLat = history.lastLat;
-                    result.fromLon = history.lastLon;
-                    result.toLat = lat;
-                    result.toLon = lon;
-                    result.speed = speed; // Asignar velocidad calculada
+                        // Crear datagrama para el worker
+                        result = new SpeedDatagram();
+                        result.fromStopId = history.lastStopId;
+                        result.toStopId = currentStopId;
+                        result.timestamp = timestamp;
+                        result.fromLat = history.lastLat;
+                        result.fromLon = history.lastLon;
+                        result.toLat = lat;
+                        result.toLon = lon;
+                        result.speed = speed; // Asignar velocidad calculada
+                        result.arcId = result.fromStopId * 10000 + result.toStopId; // Asignar identificador de arco
+                    }
                 }
 
                 // Actualizar ultima parada conocida
@@ -533,9 +546,88 @@ public class MasterI implements Master {
 
     @Override
     public String runBenchmark(ArcInfo[] arcs, Current current) {
-        // Implementacion dummy para cumplir con la interfaz
-        return "Benchmark not implemented in this version";
+        // Permitir configurar el archivo CSV y el umbral si se desea
+        String csvPath = "data/datagrams4history.csv"; // Usa el archivo real por defecto
+        double proximityThreshold = STOP_PROXIMITY_THRESHOLD; // 50 metros por defecto
+
+        // Mapa: busId -> lista de eventos detectados en paradas (por GPS)
+        Map<Integer, List<BusEvent>> busEvents = new HashMap<>();
+
+        try (BufferedReader br = new BufferedReader(new FileReader(csvPath))) {
+            String line;
+            br.readLine(); // Saltar header
+            int lineCount = 0;
+            while ((line = br.readLine()) != null) {
+                lineCount++;
+                String[] parts = line.split(",");
+                if (parts.length < 12) continue;
+                double lat, lon;
+                int busId;
+                long timestamp;
+                try {
+                    lat = Double.parseDouble(parts[4]) / 1e7;
+                    lon = Double.parseDouble(parts[5]) / 1e7;
+                    busId = Integer.parseInt(parts[11]);
+                    timestamp = parseDateTimeToTimestamp(parts[10]);
+                } catch (Exception e) { continue; }
+
+                // Detectar parada por GPS (igual que en parseLine)
+                Integer stopId = findNearestStop(lat, lon);
+                if (stopId != null) {
+                    BusEvent event = new BusEvent(busId, stopId, lat, lon, timestamp);
+                    busEvents.computeIfAbsent(busId, k -> new ArrayList<>()).add(event);
+                }
+            }
+        } catch (Exception e) {
+            return "Error leyendo CSV: " + e.getMessage();
+        }
+
+        // Para cada arco del grafo, buscar trayectos en los datos
+        StringBuilder report = new StringBuilder();
+        report.append("Benchmark de velocidad por arco (detección por GPS):\n");
+        for (ArcInfo arc : arcs) {
+            int fromStop = arc.fromStopId;
+            int toStop = arc.toStopId;
+            List<Double> speeds = new ArrayList<>();
+            int trayectos = 0;
+            for (Map.Entry<Integer, List<BusEvent>> entry : busEvents.entrySet()) {
+                List<BusEvent> events = entry.getValue();
+                // Ordenar eventos por timestamp
+                events.sort(Comparator.comparingLong(ev -> ev.timestamp));
+                for (int i = 0; i < events.size() - 1; i++) {
+                    BusEvent fromEv = events.get(i);
+                    BusEvent toEv = events.get(i + 1);
+                    if (fromEv.stopId == fromStop && toEv.stopId == toStop && toEv.timestamp > fromEv.timestamp) {
+                        double distance = haversineDistance(fromEv.lat, fromEv.lon, toEv.lat, toEv.lon);
+                        double timeHours = (toEv.timestamp - fromEv.timestamp) / (1000.0 * 3600.0);
+                        double speed = (timeHours > 0.0001 && distance > 0.001) ? distance / timeHours : 0.0;
+                        speeds.add(speed);
+                        trayectos++;
+                        // Log detallado por trayecto
+                        if (trayectos <= 5) {
+                            System.out.println("[BENCHMARK DEBUG] arco=" + fromStop + "->" + toStop + " bus=" + entry.getKey() + " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.3f", timeHours) + "h speed=" + String.format("%.2f", speed) + "km/h");
+                        }
+                    }
+                }
+            }
+            double avgSpeed = speeds.isEmpty() ? 0 : speeds.stream().mapToDouble(d -> d).average().orElse(0);
+            report.append("Arco " + fromStop + "->" + toStop + ": " + String.format("%.2f", avgSpeed) + " km/h (" + trayectos + " trayectos)\n");
+            // Log resumen por arco
+            System.out.println("[BENCHMARK ARCO] " + fromStop + "->" + toStop + " promedio=" + String.format("%.2f", avgSpeed) + "km/h trayectos=" + trayectos);
+        }
+        return report.toString();
     }
+
+    // Clase auxiliar para eventos
+    private static class BusEvent {
+        int busId, stopId;
+        double lat, lon;
+        long timestamp;
+        BusEvent(int busId, int stopId, double lat, double lon, long timestamp) {
+            this.busId = busId; this.stopId = stopId; this.lat = lat; this.lon = lon; this.timestamp = timestamp;
+        }
+    }
+    
 
     @Override
     public String runBenchmarkWithRealData(String csvPath, Current current) {

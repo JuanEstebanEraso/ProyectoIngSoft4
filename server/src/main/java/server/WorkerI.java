@@ -73,56 +73,46 @@ public class WorkerI implements Worker {
 
         for (Map.Entry<Integer, List<SpeedDatagram>> entry : datagramsByArc.entrySet()) {
             List<SpeedDatagram> arcDatagrams = entry.getValue();
-
             if (arcDatagrams.isEmpty())
                 continue;
 
-            // Obtener coordenadas del primer datagrama (todas tienen las mismas coords para
-            // el arco)
+            // Obtener coordenadas del primer datagrama (todas tienen las mismas coords para el arco)
             SpeedDatagram first = arcDatagrams.get(0);
-
-            // Calcular distancia Haversine entre paradas
             double distanceKm = haversineDistance(
                     first.fromLat, first.fromLon,
                     first.toLat, first.toLon);
 
-            // Si la distancia es 0 o invalida, usar velocidad del CSV
+            // Si la distancia es menor a 1 metro, omitir este arco
             if (distanceKm < 0.001) {
-                // Usar promedio de velocidades del CSV para este arco
-                double avgCsvSpeed = arcDatagrams.stream()
-                        .mapToDouble(dg -> dg.speed)
-                        .average()
-                        .orElse(0);
-                totalWeightedSpeed += avgCsvSpeed * arcDatagrams.size();
-            } else {
-                // Ordenar por timestamp para calcular tiempo
-                arcDatagrams.sort(Comparator.comparingLong(dg -> dg.timestamp));
-
-                SpeedDatagram firstDg = arcDatagrams.get(0);
-                SpeedDatagram lastDg = arcDatagrams.get(arcDatagrams.size() - 1);
-
-                // Tiempo en horas
-                double timeHours = (lastDg.timestamp - firstDg.timestamp) / (1000.0 * 3600.0);
-
-                // Solo calcular velocidad si hay tiempo y distancia validos
-                if (timeHours > 0.0001 && distanceKm > 0.001) { // Mas de 0.36 segundos y distancia > 1 metro
-                    // Velocidad = Distancia / Tiempo
-                    double arcSpeed = distanceKm / timeHours;
-
-                    // Limitar velocidad a valores razonables (0-120 km/h para bus urbano)
-                    arcSpeed = Math.min(Math.max(arcSpeed, 0), 120);
-
-                    // Ponderar por numero de datagramas del arco
-                    totalWeightedSpeed += arcSpeed * arcDatagrams.size();
-                    totalDistance += distanceKm * arcDatagrams.size();
-                    totalTime += timeHours * arcDatagrams.size();
-
-                    // Filtrar velocidades mayores a 5 km/h por datagrama individual
-                    filteredSpeedSum += arcSpeed;
-                    filteredCount++;
-                }
-                // Si tiempo o distancia son invalidos, simplemente omitir este arco del calculo
+                continue;
             }
+
+            // Ordenar por timestamp para calcular tiempo
+            arcDatagrams.sort(Comparator.comparingLong(dg -> dg.timestamp));
+            SpeedDatagram firstDg = arcDatagrams.get(0);
+            SpeedDatagram lastDg = arcDatagrams.get(arcDatagrams.size() - 1);
+
+            // Tiempo en horas
+            double timeHours = (lastDg.timestamp - firstDg.timestamp) / (1000.0 * 3600.0);
+
+            // Solo calcular velocidad si hay tiempo y distancia válidos
+            if (timeHours > 0.0001) { // Más de 0.36 segundos
+                // Velocidad = Distancia / Tiempo
+                double arcSpeed = distanceKm / timeHours;
+
+                // Limitar velocidad a valores razonables (0-120 km/h para bus urbano)
+                arcSpeed = Math.min(Math.max(arcSpeed, 0), 120);
+
+                // Ponderar por número de datagramas del arco
+                totalWeightedSpeed += arcSpeed * arcDatagrams.size();
+                totalDistance += distanceKm * arcDatagrams.size();
+                totalTime += timeHours * arcDatagrams.size();
+
+                // Filtrar velocidades mayores a 5 km/h por datagrama individual
+                filteredSpeedSum += arcSpeed;
+                filteredCount++;
+            }
+            // Si tiempo es inválido, omitir este arco
 
             arcCount++;
         }
