@@ -9,45 +9,25 @@ import java.util.concurrent.*;
 import java.io.*;
 import java.text.SimpleDateFormat;
 
-/**
- * Implementacion del patron Master con Separable Dependencies
- * 
- * El Master:
- * 1. Separa dependencias dividiendo datos en tareas independientes
- * 2. Replica datos necesarios para cada Task
- * 3. Distribuye Tasks a Workers del ThreadPool
- * 4. Consolida resultados parciales en resultado global
- */
 public class MasterI implements Master {
-    // Contador exclusivo para debug de arcos
     private int arcDebugCounter = 0;
 
-    // ThreadPool para gestionar Workers
     private final ExecutorService threadPool;
     private final List<WorkerPrx> registeredWorkers;
     private final Map<Integer, WorkerPrx> workerMap;
     private int workerIdCounter = 0;
     private final int numThreads;
 
-    // Mapa de paradas del grafo con sus coordenadas
-    // Key: stopId, Value: [lat, lon]
     private Map<Integer, double[]> stopsMap = new HashMap<>();
 
-    // Indice espacial para busqueda eficiente de paradas cercanas
-    // Key: "latCell,lonCell", Value: List<stopId>
     private Map<String, List<Integer>> stopGrid = new HashMap<>();
 
-    // Estado de cada arco del grafo (actualizado en tiempo real)
-    // Key: arcId (fromStopId * 10000 + toStopId), Value: ArcState
     private Map<Integer, ArcState> arcStates = new ConcurrentHashMap<>();
 
-    // Umbral de distancia para considerar que un bus esta en una parada (en km)
-    private static final double STOP_PROXIMITY_THRESHOLD = 0.05; // 50 metros
+    private static final double STOP_PROXIMITY_THRESHOLD = 0.05;
 
-    // Radio de la Tierra en km (para Haversine)
     private static final double EARTH_RADIUS_KM = 6371.0;
 
-    // Contador para debug
     private int debugCounter = 0;
 
     public MasterI(int numThreads) {
@@ -70,10 +50,6 @@ public class MasterI implements Master {
         }
     }
 
-    /**
-     * Registra las paradas del grafo con sus coordenadas
-     * y construye el indice espacial para busqueda eficiente
-     */
     public void setStops(StopInfo[] stops) {
         stopsMap.clear();
         stopGrid.clear();
@@ -81,7 +57,6 @@ public class MasterI implements Master {
         for (StopInfo stop : stops) {
             stopsMap.put(stop.stopId, new double[] { stop.latitude, stop.longitude });
 
-            // Agregar al indice espacial
             String gridCell = getGridCell(stop.latitude, stop.longitude);
             stopGrid.computeIfAbsent(gridCell, k -> new ArrayList<>()).add(stop.stopId);
         }
@@ -89,7 +64,6 @@ public class MasterI implements Master {
         System.out.println("[Master] Paradas del grafo registradas: " + stopsMap.size());
         System.out.println("[Master] Indice espacial construido: " + stopGrid.size() + " celdas");
 
-        // DEBUG: Imprimir algunas paradas
         if (stops.length > 0) {
             System.out.println("[DEBUG] Ejemplo parada 0: ID=" + stops[0].stopId + " Lat=" + stops[0].latitude + " Lon="
                     + stops[0].longitude);
@@ -97,30 +71,17 @@ public class MasterI implements Master {
         }
     }
 
-    /**
-     * Calcula la celda de la cuadricula para un punto GPS
-     * Divide el area en celdas de ~500m x 500m
-     */
     private String getGridCell(double lat, double lon) {
-        int latCell = (int) (lat * 200); // ~500m por celda a esta latitud
+        int latCell = (int) (lat * 200);
         int lonCell = (int) (lon * 200);
         return latCell + "," + lonCell;
     }
 
-    /**
-     * Determina si el bus esta en una parada basandose en proximidad GPS
-     * Usa indice espacial para busqueda eficiente
-     * 
-     * @param lat Latitud del bus
-     * @param lon Longitud del bus
-     * @return stopId si esta cerca de una parada, null si no
-     */
     private Integer findNearestStop(double lat, double lon) {
         String centerCell = getGridCell(lat, lon);
         double minDistance = Double.MAX_VALUE;
         Integer nearestStopId = null;
 
-        // Buscar en la celda actual y las 8 adyacentes
         String[] parts = centerCell.split(",");
         int centerLat = Integer.parseInt(parts[0]);
         int centerLon = Integer.parseInt(parts[1]);
@@ -147,9 +108,6 @@ public class MasterI implements Master {
         return nearestStopId;
     }
 
-    /**
-     * Calcula la distancia entre dos puntos usando la formula de Haversine
-     */
     private double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
         double lat1Rad = Math.toRadians(lat1);
         double lat2Rad = Math.toRadians(lat2);
@@ -165,29 +123,23 @@ public class MasterI implements Master {
         return EARTH_RADIUS_KM * c;
     }
 
-    /**
-     * Actualiza el estado de un arco con un nuevo recorrido
-     * Implementa la logica del caso de uso AdmCentral
-     */
     private void updateArcState(int fromStopId, int toStopId,
             double fromLat, double fromLon,
             double toLat, double toLon,
             long t0, long t1) {
         int arcId = fromStopId * 10000 + toStopId;
 
-        // Calcular distancia y tiempo
         double distance = haversineDistance(fromLat, fromLon, toLat, toLon);
         double timeHours = (t1 - t0) / (1000.0 * 3600.0);
 
-        // Log para depuración de los primeros 20 arcos
         if (arcDebugCounter < 20) {
             double speed = (timeHours > 0.0001) ? distance / timeHours : 0.0;
             System.out.println("[ARC DEBUG] fromStop=" + fromStopId + " toStop=" + toStopId +
-                " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.3f", timeHours) + "h speed=" + String.format("%.2f", speed) + "km/h");
+                    " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.3f", timeHours)
+                    + "h speed=" + String.format("%.2f", speed) + "km/h");
             arcDebugCounter++;
         }
 
-        // Actualizar estado del arco
         if (timeHours > 0.0001 && distance > 0.001) {
             ArcState state = arcStates.computeIfAbsent(arcId,
                     k -> new ArcState(fromStopId, toStopId));
@@ -217,14 +169,6 @@ public class MasterI implements Master {
         return registeredWorkers.size();
     }
 
-    /**
-     * Procesa datagramas usando el patron Separable Dependencies
-     * 
-     * 1. separateDependencies(): Divide los datagramas en tareas independientes
-     * 2. createTasks(): Crea Tasks con datos replicados
-     * 3. launchWorkers(): Distribuye tareas al ThreadPool
-     * 4. processResults(): Consolida resultados parciales
-     */
     @Override
     public GlobalResult processDatagrams(SpeedDatagram[] datagrams, int numTasks, Current current) {
         long startTime = System.currentTimeMillis();
@@ -234,31 +178,40 @@ public class MasterI implements Master {
         System.out.println("[Master] Total datagramas: " + datagrams.length);
         System.out.println("[Master] Numero de tareas: " + numTasks);
         System.out.println("[Master] Threads disponibles: " + numThreads);
+        System.out.println("[Master] Workers remotos registrados: " + registeredWorkers.size());
         System.out.println("[Master] ========================================\n");
 
-        // 1. SEPARATE DEPENDENCIES - Dividir datagramas en chunks independientes
+        long separationStart = System.currentTimeMillis();
         List<Task> tasks = separateDependencies(datagrams, numTasks);
+        long separationTime = System.currentTimeMillis() - separationStart;
 
-        // 2. LAUNCH WORKERS - Procesar tareas en el ThreadPool
+        long distributionStart = System.currentTimeMillis();
         List<Future<PartialResult>> futures = launchWorkers(tasks);
+        long distributionTime = System.currentTimeMillis() - distributionStart;
 
-        // 3. PROCESS RESULTS - Consolidar resultados parciales
+        long consolidationStart = System.currentTimeMillis();
         GlobalResult globalResult = processResults(futures, startTime);
+        long consolidationTime = System.currentTimeMillis() - consolidationStart;
+        
+        globalResult.separationTimeMs = separationTime;
+        globalResult.distributionTimeMs = distributionTime;
+        globalResult.consolidationTimeMs = consolidationTime;
+        globalResult.activeWorkers = registeredWorkers.size();
 
         System.out.println("\n[Master] ========================================");
         System.out.println("[Master] Procesamiento completado");
         System.out.println("[Master] Velocidad promedio global: " +
                 String.format("%.2f", globalResult.globalAvgSpeed) + " km/h");
         System.out.println("[Master] Tiempo total: " + globalResult.totalProcessingTimeMs + " ms");
+        System.out.println("[Master]   - Separación: " + globalResult.separationTimeMs + " ms");
+        System.out.println("[Master]   - Distribución: " + globalResult.distributionTimeMs + " ms");
+        System.out.println("[Master]   - Consolidación: " + globalResult.consolidationTimeMs + " ms");
+        System.out.println("[Master] Workers activos: " + globalResult.activeWorkers);
         System.out.println("[Master] ========================================\n");
 
         return globalResult;
     }
 
-    /**
-     * SEPARATE DEPENDENCIES: Divide los datos en tareas independientes
-     * Cada tarea recibe una copia (replicacion) de su subset de datos
-     */
     private List<Task> separateDependencies(SpeedDatagram[] datagrams, int numTasks) {
         System.out.println("[Master] Separando dependencias...");
 
@@ -273,7 +226,6 @@ public class MasterI implements Master {
             if (startIdx >= totalDatagrams)
                 break;
 
-            // Replicar datos para esta tarea (Separable Dependencies)
             SpeedDatagram[] taskDatagrams = Arrays.copyOfRange(datagrams, startIdx, endIdx);
 
             Task task = new Task();
@@ -288,31 +240,47 @@ public class MasterI implements Master {
         return tasks;
     }
 
-    /**
-     * LAUNCH WORKERS: Distribuye tareas al ThreadPool
-     * Cada Worker procesa su tarea de forma independiente
-     */
     private List<Future<PartialResult>> launchWorkers(List<Task> tasks) {
         System.out.println("[Master] Lanzando workers...");
 
         List<Future<PartialResult>> futures = new ArrayList<>();
 
-        for (Task task : tasks) {
-            Future<PartialResult> future = threadPool.submit(() -> {
-                // Crear un Worker local para procesar la tarea
-                WorkerI worker = new WorkerI(task.taskId);
-                return worker.processTask(task, null);
-            });
-            futures.add(future);
+        if (registeredWorkers.isEmpty()) {
+            System.out.println("[Master] [WARNING] No hay workers remotos registrados. Usando ThreadPool LOCAL.");
+            for (Task task : tasks) {
+                Future<PartialResult> future = threadPool.submit(() -> {
+                    WorkerI worker = new WorkerI(task.taskId);
+                    return worker.processTask(task, null);
+                });
+                futures.add(future);
+            }
+        } else {
+            System.out.println("[Master] [OK] Distribuyendo tareas a " + registeredWorkers.size() + " workers REMOTOS");
+
+            for (int i = 0; i < tasks.size(); i++) {
+                Task task = tasks.get(i);
+                final int workerIndex = i % registeredWorkers.size();
+
+                WorkerPrx remoteWorker = registeredWorkers.get(workerIndex);
+
+                Future<PartialResult> future = threadPool.submit(() -> {
+                    try {
+                        System.out.println("[Master] Enviando Task " + task.taskId + " a Worker remoto " + workerIndex);
+                        return remoteWorker.processTask(task);
+                    } catch (Exception e) {
+                        System.err.println("[Master] Error procesando Task " + task.taskId + " en worker remoto: " +
+                                e.getMessage());
+                        WorkerI localWorker = new WorkerI(task.taskId);
+                        return localWorker.processTask(task, null);
+                    }
+                });
+                futures.add(future);
+            }
         }
 
         return futures;
     }
 
-    /**
-     * PROCESS RESULTS: Consolidar resultados parciales
-     * Combina los resultados de cada Worker en un resultado global
-     */
     private GlobalResult processResults(List<Future<PartialResult>> futures, long startTime) {
         System.out.println("[Master] Procesando resultados...");
 
@@ -327,21 +295,19 @@ public class MasterI implements Master {
         double filteredSpeedSum = 0;
         int filteredCount = 0;
         Set<Integer> uniqueArcs = new HashSet<>();
-        // Para recolectar arcId de todos los datagramas
-        List<SpeedDatagram[]> allDatagrams = new ArrayList<>();
 
         for (Future<PartialResult> future : futures) {
             try {
                 PartialResult partial = future.get();
                 globalResult.totalDatagrams += partial.datagramCount;
-                // Recolectar los datagramas de cada tarea para extraer arcId y filtrar por velocidad
+
+                filteredSpeedSum += partial.filteredSpeedSum;
+                filteredCount += partial.filteredCount;
+
                 if (partial instanceof WorkerI.PartialResultWithDatagrams) {
-                    SpeedDatagram[] datagrams = ((WorkerI.PartialResultWithDatagrams)partial).datagrams;
-                    allDatagrams.add(datagrams);
+                    SpeedDatagram[] datagrams = ((WorkerI.PartialResultWithDatagrams) partial).datagrams;
                     for (SpeedDatagram dg : datagrams) {
-                        if (dg != null) {
-                            filteredSpeedSum += dg.speed;
-                            filteredCount++;
+                        if (dg != null && dg.arcId > 0) {
                             uniqueArcs.add(dg.arcId);
                         }
                     }
@@ -360,24 +326,19 @@ public class MasterI implements Master {
         globalResult.totalProcessingTimeMs = System.currentTimeMillis() - startTime;
         globalResult.totalArcs = uniqueArcs.size();
 
-        System.out.println("[Master] Arcos filtrados por velocidad >= 5 km/h: " + filteredCount);
+        System.out.println("[Master] Arcos procesados: " + filteredCount);
+        System.out.println("[Master] Velocidad promedio calculada: "
+                + String.format("%.2f", globalResult.globalAvgSpeed) + " km/h");
         return globalResult;
     }
 
-    /**
-     * Carga datagramas desde un archivo CSV
-     * Implementa la logica de AdmCentral para deteccion de paradas y arcos
-     */
     @Override
     public SpeedDatagram[] loadDatagramsFromCSV(String filePath, int maxCount, Current current) {
         System.out.println("[Master] Cargando datagramas desde: " + filePath);
         List<SpeedDatagram> datagrams = new ArrayList<>();
 
-        // Mapa para rastrear el historial de cada bus
-        // Key: busId, Value: BusHistory
         Map<Integer, BusHistory> busHistories = new HashMap<>();
 
-        // Día a filtrar (formato yyyy-MM-dd)
         String filterDay = "31-MAY-18";
         int detectedStops = 0;
         int undetectedStops = 0;
@@ -386,7 +347,7 @@ public class MasterI implements Master {
             int lineCount = 0;
             br.readLine(); // Skip header
 
-            int maxLines = 20_000_000;
+            int maxLines = 100_000_000;
             int limit = (maxCount > 0 && maxCount < maxLines) ? maxCount : maxLines;
 
             while ((line = br.readLine()) != null && lineCount < limit) {
@@ -397,7 +358,8 @@ public class MasterI implements Master {
                 }
 
                 String[] parts = line.split(",");
-                if (parts.length < 12) continue;
+                if (parts.length < 12)
+                    continue;
 
                 SpeedDatagram dg = parseLine(line.getBytes(), line.length(), busHistories);
                 if (dg != null) {
@@ -417,13 +379,6 @@ public class MasterI implements Master {
         return datagrams.toArray(new SpeedDatagram[0]);
     }
 
-    /**
-     * Parsea una linea del CSV y convierte a SpeedDatagram
-     * Implementa la logica de AdmCentral:
-     * 1. Detecta paradas por GPS (no por stopId del CSV)
-     * 2. Rastrea posicion de buses
-     * 3. Actualiza arcos cuando un bus completa un tramo
-     */
     private SpeedDatagram parseLine(byte[] buffer, int len, Map<Integer, BusHistory> busHistories) {
         try {
             String line = new String(buffer, 0, len).trim();
@@ -434,70 +389,40 @@ public class MasterI implements Master {
             if (parts.length < 12)
                 return null;
 
-            // Extraer datos basicos
-            // idx,fecha,stopId,odometer,lat,lon,lineId,variant,orientation,busId,timestamp,orden
-
-            // Validar coordenadas (permitir negativos)
             double lat = Double.parseDouble(parts[4]) / 1e7;
             double lon = Double.parseDouble(parts[5]) / 1e7;
             int busId = Integer.parseInt(parts[11]);
-            long timestamp = parseDateTimeToTimestamp(parts[10]); // datagramDate
+            long timestamp = parseDateTimeToTimestamp(parts[10]);
 
-            // Log para validar columnas extraídas
             if (debugCounter < 10) {
-                System.out.println("[VALIDACION CSV] lat=" + lat + " lon=" + lon + " busId=" + busId + " datagramDate=" + parts[10]);
+                System.out.println("[VALIDACION CSV] lat=" + lat + " lon=" + lon + " busId=" + busId + " datagramDate="
+                        + parts[10]);
                 debugCounter++;
             }
 
-            // Validar rango razonable de coordenadas (aprox Colombia/Cali)
-            // Cali aprox: 3.4N, 76.5W
             if (Math.abs(lat) > 90 || Math.abs(lon) > 180)
                 return null;
 
-            // 1. Detectar parada por GPS
             Integer currentStopId = findNearestStop(lat, lon);
 
-            // DEBUG log para ver si detecta paradas
             if (currentStopId != null && debugCounter < 50) {
                 System.out.println("[DEBUG] Bus " + busId + " detectado en parada " + currentStopId + " (Lat: " + lat
                         + ", Lon: " + lon + ")");
                 debugCounter++;
             }
 
-            // 2. Obtener historial del bus
             BusHistory history = busHistories.computeIfAbsent(busId, k -> new BusHistory(null, 0, 0, 0));
 
-            // 3. Logica de deteccion de arcos (AdmCentral)
             SpeedDatagram result = null;
 
             if (currentStopId != null) {
-                // El bus esta en una parada
                 if (history.lastStopId != null && !history.lastStopId.equals(currentStopId)) {
-                    // Completo un arco: lastStop -> currentStop
-
-                    // Calcular distancia y tiempo para la velocidad
-                    double distance = haversineDistance(history.lastLat, history.lastLon, lat, lon);
-                    double timeSeconds = (timestamp - history.lastTimestamp) / 1000.0;
-                    double timeHours = timeSeconds / 3600.0;
-                    double speed = (timeHours > 0.0001) ? distance / timeHours : 0.0;
-
-                    // Filtros de calidad de datos
-                    boolean valid = true;
-                    if (timeSeconds < 5) valid = false; // tiempo mínimo 5 segundos
-                    if (distance < 0.01) valid = false; // distancia mínima 10 metros
-                    if (speed > 120) valid = false; // velocidad máxima 120 km/h
-
-                    if (!valid) {
-                        System.out.println("[DESCARTADO] arco=" + history.lastStopId + "->" + currentStopId + " bus=" + busId + " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.1f", timeSeconds) + "s speed=" + String.format("%.2f", speed) + "km/h");
-                    } else {
-                        // Actualizar estado del arco inmediatamente
-                        updateArcState(history.lastStopId, currentStopId,
-                            history.lastLat, history.lastLon,
+                    updateArcState(history.lastStopId, currentStopId,
+                                history.lastLat, history.lastLon,
                             lat, lon,
                             history.lastTimestamp, timestamp);
 
-                        // Crear datagrama para el worker
-                        result = new SpeedDatagram();
+                    result = new SpeedDatagram();
                         result.fromStopId = history.lastStopId;
                         result.toStopId = currentStopId;
                         result.timestamp = timestamp;
@@ -505,16 +430,13 @@ public class MasterI implements Master {
                         result.fromLon = history.lastLon;
                         result.toLat = lat;
                         result.toLon = lon;
-                        result.speed = speed; // Asignar velocidad calculada
-                        result.arcId = result.fromStopId * 10000 + result.toStopId; // Asignar identificador de arco
-                    }
+                        result.arcId = result.fromStopId * 10000 + result.toStopId;
+                    return result;
                 }
 
-                // Actualizar ultima parada conocida
                 history.lastStopId = currentStopId;
             }
 
-            // Siempre actualizar ultima posicion y tiempo conocida (tracking continuo)
             history.lastLat = lat;
             history.lastLon = lon;
             history.lastTimestamp = timestamp;
@@ -522,45 +444,41 @@ public class MasterI implements Master {
             return result;
 
         } catch (Exception e) {
-            // Ignorar lineas mal formadas
             return null;
         }
     }
 
     private long parseDateTimeToTimestamp(String dateTimeStr) {
         try {
-            // Formato esperado: 2024-11-29 10:30:00
-            // Ajustar segun el formato real del CSV
             if (dateTimeStr.contains("-")) {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 return sdf.parse(dateTimeStr).getTime();
             } else {
-                // Asumir que ya es un timestamp numerico o intentar parsear otro formato
                 return Long.parseLong(dateTimeStr);
             }
         } catch (Exception e) {
-            System.err.println("[ERROR PARSE FECHA] No se pudo parsear: '" + dateTimeStr + "'. Usando System.currentTimeMillis(). Error: " + e.getMessage());
+            System.err.println("[ERROR PARSE FECHA] No se pudo parsear: '" + dateTimeStr
+                    + "'. Usando System.currentTimeMillis(). Error: " + e.getMessage());
             return System.currentTimeMillis();
         }
     }
 
     @Override
     public String runBenchmark(ArcInfo[] arcs, Current current) {
-        // Permitir configurar el archivo CSV y el umbral si se desea
-        String csvPath = "data/datagrams4history.csv"; // Usa el archivo real por defecto
-        double proximityThreshold = STOP_PROXIMITY_THRESHOLD; // 50 metros por defecto
+        String csvPath = "/home/swarch/proyecto-mio/MIO/datagrams4history.csv";
+        double proximityThreshold = STOP_PROXIMITY_THRESHOLD;
 
-        // Mapa: busId -> lista de eventos detectados en paradas (por GPS)
         Map<Integer, List<BusEvent>> busEvents = new HashMap<>();
 
         try (BufferedReader br = new BufferedReader(new FileReader(csvPath))) {
             String line;
-            br.readLine(); // Saltar header
+            br.readLine();
             int lineCount = 0;
             while ((line = br.readLine()) != null) {
                 lineCount++;
                 String[] parts = line.split(",");
-                if (parts.length < 12) continue;
+                if (parts.length < 12)
+                    continue;
                 double lat, lon;
                 int busId;
                 long timestamp;
@@ -569,9 +487,10 @@ public class MasterI implements Master {
                     lon = Double.parseDouble(parts[5]) / 1e7;
                     busId = Integer.parseInt(parts[11]);
                     timestamp = parseDateTimeToTimestamp(parts[10]);
-                } catch (Exception e) { continue; }
+                } catch (Exception e) {
+                    continue;
+                }
 
-                // Detectar parada por GPS (igual que en parseLine)
                 Integer stopId = findNearestStop(lat, lon);
                 if (stopId != null) {
                     BusEvent event = new BusEvent(busId, stopId, lat, lon, timestamp);
@@ -582,7 +501,6 @@ public class MasterI implements Master {
             return "Error leyendo CSV: " + e.getMessage();
         }
 
-        // Para cada arco del grafo, buscar trayectos en los datos
         StringBuilder report = new StringBuilder();
         report.append("Benchmark de velocidad por arco (detección por GPS):\n");
         for (ArcInfo arc : arcs) {
@@ -592,7 +510,6 @@ public class MasterI implements Master {
             int trayectos = 0;
             for (Map.Entry<Integer, List<BusEvent>> entry : busEvents.entrySet()) {
                 List<BusEvent> events = entry.getValue();
-                // Ordenar eventos por timestamp
                 events.sort(Comparator.comparingLong(ev -> ev.timestamp));
                 for (int i = 0; i < events.size() - 1; i++) {
                     BusEvent fromEv = events.get(i);
@@ -603,35 +520,40 @@ public class MasterI implements Master {
                         double speed = (timeHours > 0.0001 && distance > 0.001) ? distance / timeHours : 0.0;
                         speeds.add(speed);
                         trayectos++;
-                        // Log detallado por trayecto
                         if (trayectos <= 5) {
-                            System.out.println("[BENCHMARK DEBUG] arco=" + fromStop + "->" + toStop + " bus=" + entry.getKey() + " dist=" + String.format("%.3f", distance) + "km time=" + String.format("%.3f", timeHours) + "h speed=" + String.format("%.2f", speed) + "km/h");
+                            System.out.println("[BENCHMARK DEBUG] arco=" + fromStop + "->" + toStop + " bus="
+                                    + entry.getKey() + " dist=" + String.format("%.3f", distance) + "km time="
+                                    + String.format("%.3f", timeHours) + "h speed=" + String.format("%.2f", speed)
+                                    + "km/h");
                         }
                     }
                 }
             }
             double avgSpeed = speeds.isEmpty() ? 0 : speeds.stream().mapToDouble(d -> d).average().orElse(0);
-            report.append("Arco " + fromStop + "->" + toStop + ": " + String.format("%.2f", avgSpeed) + " km/h (" + trayectos + " trayectos)\n");
-            // Log resumen por arco
-            System.out.println("[BENCHMARK ARCO] " + fromStop + "->" + toStop + " promedio=" + String.format("%.2f", avgSpeed) + "km/h trayectos=" + trayectos);
+            report.append("Arco " + fromStop + "->" + toStop + ": " + String.format("%.2f", avgSpeed) + " km/h ("
+                    + trayectos + " trayectos)\n");
+            System.out.println("[BENCHMARK ARCO] " + fromStop + "->" + toStop + " promedio="
+                    + String.format("%.2f", avgSpeed) + "km/h trayectos=" + trayectos);
         }
         return report.toString();
     }
 
-    // Clase auxiliar para eventos
     private static class BusEvent {
         int busId, stopId;
         double lat, lon;
         long timestamp;
+
         BusEvent(int busId, int stopId, double lat, double lon, long timestamp) {
-            this.busId = busId; this.stopId = stopId; this.lat = lat; this.lon = lon; this.timestamp = timestamp;
+            this.busId = busId;
+            this.stopId = stopId;
+            this.lat = lat;
+            this.lon = lon;
+            this.timestamp = timestamp;
         }
     }
-    
 
     @Override
     public String runBenchmarkWithRealData(String csvPath, Current current) {
-        // Implementacion dummy para cumplir con la interfaz
         return "Benchmark with real data not implemented in this version";
     }
 

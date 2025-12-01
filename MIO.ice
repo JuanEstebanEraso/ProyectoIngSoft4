@@ -76,7 +76,7 @@ module MIO
         long filteredCount;      // Cantidad de datagramas filtrados (>5 km/h)
     }
     
-    // Resultado global consolidado
+    // Resultado global consolidado con métricas detalladas
     struct GlobalResult
     {
         int totalArcs;              // Total de arcos únicos
@@ -85,6 +85,13 @@ module MIO
         long totalProcessingTimeMs; // Tiempo total de procesamiento
         int workerCount;            // Número de workers utilizados
         int taskCount;              // Número de tareas procesadas
+        
+        // Métricas detalladas para análisis de rendimiento
+        long loadCsvTimeMs;         // Tiempo de carga del CSV
+        long separationTimeMs;      // Tiempo de separación de dependencias
+        long distributionTimeMs;    // Tiempo de distribución a workers
+        long consolidationTimeMs;   // Tiempo de consolidación de resultados
+        int activeWorkers;          // Número de workers remotos activos
     }
     
     // Task: representa una tarea independiente con datos replicados
@@ -168,5 +175,9 @@ module MIO
         
         // Construir el grafo (inicializar el sistema)
         void buildGraph();
+        
+        // Calcular velocidad promedio procesando el CSV en el servidor
+        // El cliente solo solicita el cálculo, no envía datos
+        GlobalResult calculateAverageSpeed(string csvPath, int maxDatagrams);
     }
 }

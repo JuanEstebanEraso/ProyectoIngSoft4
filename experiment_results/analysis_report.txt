@@ -1,0 +1,36 @@
+================================================================================
+REPORTE DE ANÁLISIS DE ESCALABILIDAD
+Sistema MIO - Procesamiento Distribuido
+================================================================================
+
+1. RESUMEN DE EXPERIMENTOS
+--------------------------------------------------------------------------------
+Total de experimentos: 3
+Tamaños probados: [1000000, 10000000, 100000000]
+Configuraciones de workers: [3]
+
+2. MÉTRICAS POR CONFIGURACIÓN
+--------------------------------------------------------------------------------
+
+Tamaño: 1,000,000 datagramas
+  Workers: 3
+    Tiempo total: 3092 ms
+    Throughput: 189357 datagramas/s
+    Velocidad promedio: 48.11 km/h
+
+
+Tamaño: 10,000,000 datagramas
+  Workers: 3
+    Tiempo total: 15633 ms
+    Throughput: 390044 datagramas/s
+    Velocidad promedio: 20.99 km/h
+
+
+Tamaño: 100,000,000 datagramas
+  Workers: 3
+    Tiempo total: 36396 ms
+    Throughput: 1677756 datagramas/s
+    Velocidad promedio: 6.39 km/h
+
+
+================================================================================
