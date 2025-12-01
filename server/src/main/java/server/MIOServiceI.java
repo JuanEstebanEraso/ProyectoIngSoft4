@@ -24,6 +24,9 @@ public class MIOServiceI implements MIOService {
         this.stops = new HashMap<>();
         this.routes = new ArrayList<>();
         this.arcs = new ArrayList<>();
+            String basePath = "/home/swarch/proyecto-mio/MIO/";
+            String linesPath = basePath + "lines-241.csv";
+            String stopsPath = basePath + "stops-241.csv";
     }
     
     public void setMaster(MasterI master) {
@@ -36,9 +39,9 @@ public class MIOServiceI implements MIOService {
             System.out.println("Construyendo grafo del SITM-MIO...");
             
             // Rutas de los archivos CSV
-            String linesPath = "data/lines-241.csv";
-            String stopsPath = "data/stops-241.csv";
-            String lineStopsPath = "data/linestops-241.csv";
+            String linesPath = "/home/swarch/proyecto-mio/MIO/lines-241.csv";
+            String stopsPath = "/home/swarch/proyecto-mio/MIO/stops-241.csv";
+            String lineStopsPath = "/home/swarch/proyecto-mio/MIO/linestops-241.csv";
             
             // Leer los archivos CSV
             this.routes = CSVReader.readRoutes(linesPath);

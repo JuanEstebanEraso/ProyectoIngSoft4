@@ -19,6 +19,54 @@ import java.text.SimpleDateFormat;
  * 4. Consolida resultados parciales en resultado global
  */
 public class MasterI implements Master {
+        // Cache de datagramas cargados desde el CSV
+        private SpeedDatagram[] cachedDatagrams = null;
+        private final String DATAGRAMS_CSV_PATH = "/home/swarch/proyecto-mio/MIO/datagrams4history.csv";
+
+        // Carga y cachea los datagramas si no están cargados
+        private void ensureDatagramsLoaded() {
+            if (cachedDatagrams == null) {
+                System.out.println("[Master] Cargando datagramas en memoria desde: " + DATAGRAMS_CSV_PATH);
+                cachedDatagrams = loadDatagramsFromCSV(DATAGRAMS_CSV_PATH, 0, null);
+                System.out.println("[Master] Datagramas cargados en cache: " + (cachedDatagrams != null ? cachedDatagrams.length : 0));
+            }
+        }
+
+        // El servidor envía los datagramas solicitados
+        @Override
+        public SpeedDatagram[] getDatagramsFromServer(int count, Current current) {
+            ensureDatagramsLoaded();
+            if (cachedDatagrams == null) return new SpeedDatagram[0];
+            int toSend = Math.min(count, cachedDatagrams.length);
+            return Arrays.copyOfRange(cachedDatagrams, 0, toSend);
+        }
+
+        // El servidor informa cuántos datagramas tiene disponibles
+        @Override
+        public int getTotalDatagramsCount(Current current) {
+            ensureDatagramsLoaded();
+            return cachedDatagrams != null ? cachedDatagrams.length : 0;
+        }
+
+        // Ejecuta el benchmark usando los datagramas distribuidos por el servidor
+        @Override
+        public String runBenchmarkWithRealDataFromServer(Current current) {
+            ensureDatagramsLoaded();
+            if (cachedDatagrams == null || cachedDatagrams.length == 0) return "No hay datagramas cargados en el servidor.";
+            int numTasks = Runtime.getRuntime().availableProcessors() * 2;
+            GlobalResult result = processDatagrams(cachedDatagrams, numTasks, current);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Benchmark con datagramas distribuidos por el servidor\n");
+            sb.append("Total datagramas: ").append(result.totalDatagrams).append("\n");
+            sb.append("Arcos únicos: ").append(result.totalArcs).append("\n");
+            sb.append("Velocidad promedio: ").append(String.format("%.2f", result.globalAvgSpeed)).append(" km/h\n");
+            sb.append("Tiempo total: ").append(result.totalProcessingTimeMs).append(" ms\n");
+            sb.append("Workers utilizados: ").append(result.workerCount).append("\n");
+            sb.append("Tareas procesadas: ").append(result.taskCount).append("\n");
+            double throughput = (double) result.totalDatagrams / result.totalProcessingTimeMs * 1000;
+            sb.append("Throughput: ").append((long) throughput).append(" datagramas/segundo\n");
+            return sb.toString();
+        }
     // Contador exclusivo para debug de arcos
     private int arcDebugCounter = 0;
 
@@ -78,7 +126,7 @@ public class MasterI implements Master {
         stopsMap.clear();
         stopGrid.clear();
 
-        for (StopInfo stop : stops) {
+            for (StopInfo stop : stops) { 
             stopsMap.put(stop.stopId, new double[] { stop.latitude, stop.longitude });
 
             // Agregar al indice espacial
@@ -547,7 +595,7 @@ public class MasterI implements Master {
     @Override
     public String runBenchmark(ArcInfo[] arcs, Current current) {
         // Permitir configurar el archivo CSV y el umbral si se desea
-        String csvPath = "data/datagrams4history.csv"; // Usa el archivo real por defecto
+        String csvPath = "/home/swarch/proyecto-mio/MIO/datagrams4history.csv"; // Usa el archivo real por defecto
         double proximityThreshold = STOP_PROXIMITY_THRESHOLD; // 50 metros por defecto
 
         // Mapa: busId -> lista de eventos detectados en paradas (por GPS)

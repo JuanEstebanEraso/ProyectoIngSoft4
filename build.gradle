@@ -52,4 +52,9 @@ subprojects {
             configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
         }
     }
+    
+        sourceCompatibility = 11
+        targetCompatibility = 11
+            sourceCompatibility = 11
+            targetCompatibility = 11
 }

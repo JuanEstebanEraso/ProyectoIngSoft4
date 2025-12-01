@@ -140,6 +140,14 @@ module MIO
         
         // Ejecutar benchmark completo con múltiples tamaños (datos generados)
         string runBenchmark(ArcList arcs);
+
+        // NUEVOS MÉTODOS PARA DISTRIBUCIÓN DE DATOS DESDE EL SERVIDOR
+        // El servidor envía los datagramas solicitados
+        DatagramList getDatagramsFromServer(int count);
+        // El servidor informa cuántos datagramas tiene disponibles
+        int getTotalDatagramsCount();
+        // Ejecuta el benchmark usando los datagramas distribuidos por el servidor
+        string runBenchmarkWithRealDataFromServer();
     }
     
     // Interfaz principal del sistema MIO

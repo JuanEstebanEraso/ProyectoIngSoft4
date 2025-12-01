@@ -15,9 +15,9 @@ public class Main {
             System.out.println("Iniciando construcción del grafo de arcos del SITM-MIO...\n");
             
             // Rutas de los archivos CSV
-            String linesPath = "data/lines-241.csv";
-            String stopsPath = "data/stops-241.csv";
-            String lineStopsPath = "data/linestops-241.csv";
+            String linesPath = "/home/swarch/proyecto-mio/MIO/lines-241.csv";
+            String stopsPath = "/home/swarch/proyecto-mio/MIO/stops-241.csv";
+            String lineStopsPath = "/home/swarch/proyecto-mio/MIO/linestops-241.csv";
             
             // Leer los archivos CSV
             System.out.println("Leyendo archivos CSV...");

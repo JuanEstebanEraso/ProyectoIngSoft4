@@ -12,8 +12,8 @@ import MIO.*;
  */
 public class Client {
     
-    // Ruta al archivo de datagramas (archivo completo de historia)
-    private static final String DATAGRAMS_CSV = "data/datagrams4history.csv";
+    // El cliente ya no lee archivos locales, recibe datagramas del servidor
+    // private static final String DATAGRAMS_CSV = "/home/swarch/proyecto-mio/MIO/datagrams4history.csv";
     
     public static void main(String[] args) {
         // Configurar propiedades de Ice con limite de mensaje mayor
@@ -30,8 +30,9 @@ public class Client {
             System.out.println("=".repeat(80));
             
             // Crear proxies a los servicios remotos
-            ObjectPrx baseMIO = communicator.stringToProxy("MIOService:tcp -h localhost -p 10000");
-            ObjectPrx baseMaster = communicator.stringToProxy("Master:tcp -h localhost -p 10000");
+            // IP real del servidor
+            ObjectPrx baseMIO = communicator.stringToProxy("MIOService:tcp -h 10.147.17.101 -p 9878");
+            ObjectPrx baseMaster = communicator.stringToProxy("Master:tcp -h 10.147.17.101 -p 9878");
             
             MIOServicePrx mioService = MIOServicePrx.checkedCast(baseMIO);
             MasterPrx master = MasterPrx.checkedCast(baseMaster);
@@ -62,7 +63,7 @@ public class Client {
             
             // Verificar modo de ejecucion
             if (args.length > 0 && args[0].equals("benchmark")) {
-                // Benchmark con datos REALES del CSV
+                // Benchmark con datos REALES distribuidos por el servidor
                 runBenchmark(master, arcs);
             } else if (args.length > 0 && args[0].equals("benchmark-gen")) {
                 // Benchmark con datos generados
@@ -87,14 +88,14 @@ public class Client {
     }
     
     /**
-     * Ejecuta benchmark con datos REALES del CSV
+     * Ejecuta benchmark con datos REALES distribuidos por el servidor
      */
     private static void runBenchmarkWithRealData(MasterPrx master) {
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("EJECUTANDO BENCHMARK CON DATOS REALES (datagrams4history.csv)");
+        System.out.println("EJECUTANDO BENCHMARK CON DATOS REALES (servidor distribuye datagramas)");
         System.out.println("=".repeat(80));
-        
-        String report = master.runBenchmarkWithRealData(DATAGRAMS_CSV);
+        // El servidor ahora distribuye los datagramas, no se pasa ruta de archivo
+        String report = master.runBenchmarkWithRealDataFromServer();
         System.out.println(report);
     }
     
@@ -111,60 +112,46 @@ public class Client {
     }
     
     /**
-     * Ejecuta prueba con un numero especifico de datagramas reales
+     * Ejecuta prueba con un numero especifico de datagramas reales distribuidos por el servidor
      */
     private static void runSingleTestWithRealData(MasterPrx master, int count) {
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("EJECUTANDO PRUEBA CON " + formatNumber(count) + " DATAGRAMAS REALES");
+        System.out.println("EJECUTANDO PRUEBA CON " + formatNumber(count) + " DATAGRAMAS REALES (servidor distribuye)");
         System.out.println("=".repeat(80));
-        
-        // Cargar datagramas reales
-        System.out.println("\n[4] Cargando " + formatNumber(count) + " datagramas desde CSV...");
+        // El servidor distribuye los datagramas
         long loadStart = System.currentTimeMillis();
-        SpeedDatagram[] datagrams = master.loadDatagramsFromCSV(DATAGRAMS_CSV, count);
+        SpeedDatagram[] datagrams = master.getDatagramsFromServer(count);
         long loadTime = System.currentTimeMillis() - loadStart;
         System.out.println("    Carga completada en " + loadTime + " ms");
-        System.out.println("    Datagramas cargados: " + formatNumber(datagrams.length));
-        
+        System.out.println("    Datagramas recibidos: " + formatNumber(datagrams.length));
         // Procesar datagramas
         int numTasks = Runtime.getRuntime().availableProcessors() * 2;
         System.out.println("\n[5] Procesando datagramas con " + numTasks + " tareas...");
-        
         GlobalResult result = master.processDatagrams(datagrams, numTasks);
-        
         // Mostrar resultados
         printResults(result);
     }
     
     /**
-     * Ejecuta prueba demo con datos reales
+     * Ejecuta prueba demo con datos reales distribuidos por el servidor
      */
     private static void runDemoWithRealData(MasterPrx master) {
         System.out.println("\n" + "=".repeat(80));
-        System.out.println("PRUEBA DEMO - Procesamiento con datos REALES");
+        System.out.println("PRUEBA DEMO - Procesamiento con datos REALES (servidor distribuye)");
         System.out.println("=".repeat(80));
         System.out.println("\nOpciones de ejecucion:");
         System.out.println("  java -jar client.jar benchmark       -> Benchmark con datos reales");
         System.out.println("  java -jar client.jar benchmark-gen   -> Benchmark con datos generados");
         System.out.println("  java -jar client.jar test <cantidad> -> Prueba con N datagramas reales");
-        
-        // Obtiene el total de líneas del archivo CSV, pero limita a 1,000,000 máximo
-        int totalLines = countLinesInFile(DATAGRAMS_CSV);
+        // El servidor conoce el total de datagramas
+        int totalLines = master.getTotalDatagramsCount();
         int maxLimit = 1_000_000;
         int toProcess = Math.min(totalLines, maxLimit);
         runSingleTestWithRealData(master, toProcess);
     }
 
-    // Cuenta el total de líneas en el archivo CSV
-    private static int countLinesInFile(String filePath) {
-        int lines = 0;
-        try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(filePath))) {
-            while (reader.readLine() != null) lines++;
-        } catch (java.lang.Exception e) {
-            System.err.println("Error contando líneas del archivo: " + e.getMessage());
-        }
-        return lines;
-    }
+    // El cliente ya no cuenta líneas en archivos locales
+    // private static int countLinesInFile(String filePath) { ... }
     
     /**
      * Muestra los resultados de procesamiento

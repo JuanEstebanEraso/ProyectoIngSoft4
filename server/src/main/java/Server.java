@@ -22,7 +22,7 @@ public class Server {
         initData.properties = Util.createProperties();
         // 500 MB para soportar 100M datagramas
         initData.properties.setProperty("Ice.MessageSizeMax", "500000");
-        initData.properties.setProperty("MIOService.Endpoints", "tcp -h 0.0.0.0 -p 10000");
+        initData.properties.setProperty("MIOService.Endpoints", "tcp -h 0.0.0.0 -p 9878");
         
         try (Communicator communicator = Util.initialize(args, initData)) {
             
@@ -48,7 +48,7 @@ public class Server {
             System.out.println("  - Master (identity: 'Master')");
             System.out.println("\nConfiguracion ThreadPool:");
             System.out.println("  - Threads: " + NUM_THREADS);
-            System.out.println("\nEndpoint: tcp -h 0.0.0.0 -p 10000");
+            System.out.println("\nEndpoint: tcp -h 0.0.0.0 -p 9878");
             
             // Activar el adapter
             adapter.activate();
