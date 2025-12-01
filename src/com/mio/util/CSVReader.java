@@ -81,7 +81,6 @@ public class CSVReader {
                     int stopId = Integer.parseInt(values[4].trim());
                     int planVersionId = Integer.parseInt(values[5].trim());
                     int lineVariant = Integer.parseInt(values[6].trim());
-                    // valores[7] es REGISTERDATE, saltamos
                     int lineVariantType = Integer.parseInt(values[8].trim());
                     
                     lineStops.add(new LineStop(lineStopId, stopSequence, orientation, lineId,
@@ -114,7 +113,6 @@ public class CSVReader {
             }
         }
         
-        // Agregar el último valor
         values.add(currentValue.toString());
         
         return values.toArray(new String[0]);

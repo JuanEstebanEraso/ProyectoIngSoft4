@@ -1,16 +1,12 @@
 package com.mio.model;
 
-/**
- * Mantiene el estado de un arco del grafo
- * Actualizado cada vez que un bus recorre el arco
- */
 public class ArcState {
     private final int fromStopId;
     private final int toStopId;
-    private double averageSpeed; // km/h
-    private int traversalCount; // Cuántas veces se ha recorrido
-    private double totalDistance; // km acumulados
-    private double totalTime; // horas acumuladas
+    private double averageSpeed;
+    private int traversalCount;
+    private double totalDistance;
+    private double totalTime;
 
     public ArcState(int fromStopId, int toStopId) {
         this.fromStopId = fromStopId;
@@ -21,28 +17,21 @@ public class ArcState {
         this.totalTime = 0.0;
     }
 
-    /**
-     * Actualiza el estado del arco con un nuevo recorrido
-     * Thread-safe para procesamiento concurrente
-     */
     public synchronized void updateSpeed(double distance, double timeHours) {
         if (timeHours <= 0.0001 || distance <= 0.001) {
-            return; // Ignorar datos inválidos
+            return;
         }
 
         double speed = distance / timeHours;
-        // Limitar a valores razonables para bus urbano
         speed = Math.min(Math.max(speed, 0), 120);
 
         totalDistance += distance;
         totalTime += timeHours;
         traversalCount++;
 
-        // Recalcular promedio
         averageSpeed = totalDistance / totalTime;
     }
 
-    // Getters
     public int getFromStopId() {
         return fromStopId;
     }

@@ -13,6 +13,14 @@ subprojects {
     apply plugin: 'com.zeroc.gradle.ice-builder.slice'
  
     //
+    // Set Java compatibility to 11 for broader compatibility
+    //
+    java {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    //
     // Both Client and Server projects share the MIO.ice Slice definitions
     //
     slice {
@@ -51,5 +59,24 @@ subprojects {
         from {
             configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
         }
+    }
+    
+    // Create worker-client.jar for distributed processing
+    if (project.name == "client") {
+        task workerJar(type: Jar) {
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            archiveBaseName = 'worker-client'
+            
+            manifest {
+                attributes("Main-Class": "WorkerClient")
+            }
+            
+            from sourceSets.main.output
+            from {
+                configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+            }
+        }
+        
+        build.dependsOn workerJar
     }
 }

@@ -1,0 +1,4 @@
+timestamp,datagram_count,workers,total_time_ms,load_time_ms,separation_time_ms,distribution_time_ms,consolidation_time_ms,avg_speed_kmh,throughput_dps,total_arcs,tasks
+2025-12-01_00:23:51,1000000,3,3092,4109,1,3,3091,48.11,189356.73,0,64
+2025-12-01_00:24:52,10000000,3,15633,40192,6,1,15626,20.99,390044.33,0,64
+2025-12-01_00:32:17,100000000,3,36396,403847,69,0,36327,6.39,1677755.74,0,64
